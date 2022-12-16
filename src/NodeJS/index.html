@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>:: 전자응용설계 02분반 2조::</title>
+
+	<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
+  </head>
+  <body>
+    
+<div class="col-lg-8 mx-auto p-3 py-md-3">
+  <header class="d-flex align-items-center pb-2 mb-4 border-bottom">
+    <img class="pe-5" src="https://www.donga.ac.kr/Web2017/images/main_top_logo.png">
+    <span class="fs-5">화재경보기 시스템</span> <span id="serverstatus" class="fs-5 ms-2"></span>
+  </header>
+
+  <main>
+    <h3>경보기 상태: &nbsp;<span id="alarmstatus">-</span></h3>
+    <p class="my-0 fs-5 col-md-8">온도 : <span id="temperature">0</span>°</p>
+    <p class="my-0 fs-5 col-md-8">이산화탄소 : <span id="co2">0</span>ppm</p>
+    <hr class="col-3 col-md-2 mb-2 w-100">
+
+    <div class="row g-10 pt-3">
+      <div class="col-md-6 d-grid gap-2 pb-2">
+        <button type="button" class="btn btn-danger btn-lg" onclick="startAlarm()">경보기 작동</button>
+      </div>
+      <div class="col-md-6 d-grid gap-2 pb-2">		
+        <button type="button" class="btn btn-success btn-lg" onclick="stopAlarm()">경보기 종료</button>
+      </div>
+    </div>	
+    <hr class="col-3 col-md-2 mb-3 w-100">
+	
+    <div class="row g-10">
+      <div class="col-md-4 d-grid gap-2 pb-2">
+        <div class="input-group input-group-lg">
+          <span class="input-group-text">감지 온도</span>
+          <input type="number" class="form-control" id="maxTemp" value="100" min="0" max="100">
+        </div>
+	  </div>
+      <div class="col-md-4 d-grid gap-2 pb-2">
+        <div class="input-group input-group-lg">
+          <span class="input-group-text">감지 co2 농도</span>
+          <input type="number" class="form-control" id="maxCo2" value="1000" min="0" max="2000">
+        </div>
+	  </div>
+      <div class="col-md-4 d-grid gap-2 pb-2">
+        <button type="button" class="btn btn-warning" onclick="sendCaseData()">조건 설정</button>
+	  </div>
+    </div>
+      <div id="alertbox" class="alert alert-success mt-3 d-none" role="alert"></div>
+  </main>
+</div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/js/bootstrap.bundle.min.js" integrity="sha384-gtEjrD/SeCtmISkJkNUaaKMoLD0//ElJ19smozuHV6z3Iehds+3Ulb9Bn9Plx0x4" crossorigin="anonymous"></script>
+    <script>	
+	var maxT = document.getElementById('maxTemp');
+	var maxC = document.getElementById('maxCo2');
+		
+	const webSocket = new WebSocket('wss://donga.eglu.top');
+      webSocket.onopen = function () {
+      console.log('Websocket Connected!')
+	  webSocket.send('request_data');	  
+    };
+	
+	webSocket.onclose = function (event) {
+	  alertMSG('Socket 서버와 연결이 종료되었습니다!', 'danger');
+	};
+	
+    webSocket.onmessage = function (event) {
+      console.log(event.data);
+	  var result = event.data.split('|');
+	  if(result.length == 2)
+	  {
+	    switch(result[0])
+	    {
+	      case 'temp': document.getElementById('temperature').innerHTML = result[1]; break;
+	      case 'co2': document.getElementById('co2').innerHTML = result[1]; break;
+		  case 'mtemp': maxT.value = result[1]; break;
+		  case 'mco2': maxC.value = result[1]; break;
+	  	  case 'alarm': {
+			var statText = '';
+		    if(result[1] == 0)
+				statText = '경보 대기'; 
+		    else if(result[1] == 1)
+				statText = '실제 경보'; 
+		    else if(result[1] == 2)
+				statText = '훈련 경보';
+			document.getElementById('alarmstatus').innerHTML = statText;
+			break;
+		  }
+		  case 'server': { 		    
+		    document.getElementById('serverstatus').innerHTML = (result[1]>0?"(ControlNet 연결됨)":"(ControlNet 연결실패)");
+			break;
+	      }
+	    }
+	  }
+    };
+	
+	var HideAlertTimer;
+	var alertbox = document.getElementById('alertbox');
+	
+	function alertMSG(message, type)
+	{
+	  clearTimeout(HideAlertTimer);
+	  HideAlertTimer = setTimeout(function() { alertbox.classList.replace('d-block', 'd-none');	}, 5000);
+	  
+	  alertbox.innerHTML = message;
+	  alertbox.classList.replace('d-none', 'd-block');
+	  if(type == 'danger') {
+	    alertbox.classList.replace('alert-success', 'alert-danger');
+	    clearTimeout(HideAlertTimer);    
+	  } else
+	    alertbox.classList.replace('alert-danger', 'alert-success');
+	}
+	
+	function startAlarm()
+	{
+	  if(WebSocket.readyState == WebSocket.open)
+	  {
+	    webSocket.send('salarm|2');
+		alertMSG('경보기 작동 명령을 보냈습니다!', 'success');
+      }
+	}
+	
+	function stopAlarm()
+	{
+	  if(WebSocket.readyState == WebSocket.open)
+	  {
+	    webSocket.send('salarm|0');
+		alertMSG('경보기 작동 중지 명령을 보냈습니다!', 'success');
+      }
+	}
+	
+	function sendCaseData()
+	{
+	  if(WebSocket.readyState == WebSocket.open)
+	  {		
+		if(maxT.value < 0) maxT.value = 0;
+		else if(maxT.value > 100) maxT.value = 100;		
+		if(maxC.value < 0) maxC.value = 0;
+		else if(maxC.value > 2000) maxC.value = 2000;
+		
+	    webSocket.send('mtemp|' + Number(maxT.value ));
+	    webSocket.send('mco2|' + Number(maxC.value ));
+		alertMSG('감지 온도, co2 농도 조건 변경 명령을 보냈습니다!', 'success');
+      }
+	}
+	
+	</script>
+  </body>
+</html>
